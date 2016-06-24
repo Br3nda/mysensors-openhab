@@ -1,0 +1,384 @@
+// http://forum.mysensors.org/topic/655/serial-gateway-connection-to-openhab/32
+
+import org.openhab.core.library.types.*
+import org.openhab.core.persistence.*
+import org.openhab.model.script.actions.*
+import java.util.*
+import org.eclipse.xtext.xbase.lib.*
+import org.openhab.core.items.*
+
+var String sketchName = ""
+
+var int M_PRESENTATION = 0
+var int M_SET = 1
+var int M_REQ = 2
+var int M_INTERNAL = 3
+var int M_STREAM = 4
+
+var int V_TEMP = 0
+var int V_HUM = 1
+var int V_LIGHT = 2
+var int V_STATUS = 2
+var int V_DIMMER = 3
+var int V_PERCENTAGE = 3
+var int V_PRESSURE = 4
+var int V_FORECAST = 5
+var int V_RAIN = 6
+var int V_RAINRATE = 7
+var int V_WIND = 8
+var int V_GUST = 9
+var int V_DIRECTION = 10
+var int V_UV = 11
+var int V_WEIGHT = 12
+var int V_DISTANCE = 13
+var int V_IMPEDANCE = 14
+var int V_ARMED = 15
+var int V_TRIPPED = 16
+var int V_WATT = 17
+var int V_KWH = 18
+var int V_SCENE_ON = 19
+var int V_SCENE_OFF = 20
+var int V_HEATER = 21
+var int V_HEATER_SW = 22
+var int V_LIGHT_LEVEL = 23
+var int V_VAR1 = 24
+var int V_VAR2 = 25
+var int V_VAR3 = 26
+var int V_VAR4 = 27
+var int V_VAR5 = 28
+var int V_UP = 29
+var int V_DOWN = 30
+var int V_STOP = 31
+var int V_IR_SEND = 32
+var int V_IR_RECEIVE = 33
+var int V_FLOW = 34
+var int V_VOLUME = 35
+var int V_LOCK_STATUS = 36
+var int V_LEVEL = 37
+var int V_VOLTAGE = 38
+var int V_CURRENT = 39
+var int V_RGB = 40
+var int V_RGBW = 41
+var int V_ID = 42
+var int V_UNIT_PREFIX = 43
+var int V_HVAC_SETPOINT_COOL = 44
+var int V_HVAC_SETPOINT_HEAT = 45
+var int V_HVAC_FLOW_MODE = 46
+
+var int msgPresentation = 0
+var int msgSet = 1
+var int msgReq = 2
+var int msgInternal = 3
+var int msgStream = 4
+var int alarmArmor = 1
+
+// Internal Commands
+
+var int I_BATTERY_LEVEL = 0
+var int I_TIME = 1
+var int I_VERSION = 2
+var int I_ID_REQUEST = 3
+var int I_ID_RESPONSE = 4
+var int I_INCLUSION_MODE = 5
+var int I_CONFIG = 6
+var int I_FIND_PARENT = 7
+var int I_FIND_PARENT_RESPONSE = 8
+var int I_LOG_MESSAGE = 9
+var int I_CHILDREN = 10
+var int I_SKETCH_NAME = 11
+var int I_SKETCH_VERSION = 12
+var int I_REBOOT = 13
+var int I_GATEWAY_READY = 14
+var int I_REQUEST_SIGNING = 15
+var int I_GET_NONCE = 16
+var int I_GET_NONCE_RESPONSE = 17
+
+
+// Mappings
+var HashMap<String, String> sensorToItemsMap = newLinkedHashMap(
+    "5;0;" -> "Humidity_Kitchen", 
+    "5;1;" -> "Temperature_Kitchen", 
+    
+    "10;0;" -> "Lamp_LivingRoom",
+    "Lamp_LivingRoom" -> "10;0;",
+    "10;1;" -> "Lamp_WorkBench",
+    "Lamp_WorkBench" -> "10;1;",
+    "10;2;" -> "Fan_Hallway",
+    "Fan_Hallway" -> "10;2;",
+    "10;3;" -> "NightLight_ChildBedroom",
+    "NightLight_ChildBedroom" -> "10;3;",
+	
+    "16;1;" -> "Temperature_Laundry",
+    "16;0;" -> "Humidity_Laundry",
+    "16;3;" -> "SoundAverage_Laundry",
+    "16;4;" -> "SoundRange_Laundry",
+    "16;5;" -> "SoundHighest_Laundry",
+    "16;6;" -> "SoundLowest_Laundry",
+
+    "20;0;" -> "Humidity_MasterBedroom", 
+    "20;1;" -> "Temperature_MasterBedroom", 
+
+    "30;0;" -> "Humidity_DiningRoom", 
+    "30;1;" -> "Temperature_DiningRoom", 
+    "30;2;" -> "PotPlant_DiningRoom", 
+    "30;3;" -> "Button_DiningRoom",
+    "30;4;" -> "Motion_DiningRoom_Raw",
+
+    "40;0;" -> "Humidity_Garage", 
+    "40;1;" -> "Temperature_Garage", 
+	
+    "50;0;" -> "Humidity_Study", 
+    "50;1;" -> "Temperature_Study", 
+    "50;2;" -> "CoffeePlant", 
+
+    "60;0;" -> "Humidity_GuestRoom", 
+    "60;1;" -> "Temperature_GuestRoom", 
+
+    "70;0;" -> "Humidity_LivingRoom", 
+    "70;1;" -> "Temperature_LivingRoom", 
+    "70;2;" -> "PotPlant_LivingRoom", 
+     "70;3;" -> "Button_LivingRoom",
+    "70;4;" -> "Motion_LivingRoom_Raw",
+
+    "80;0;" -> "Humidity_ChildBedroom", 
+    "80;1;" -> "Temperature_ChildBedroom", 
+    "80;2;" -> "PotPlant_ChildBedroom",
+    
+    "90;0;" -> "Power_HeatPump",
+    "Power_HeatPump" -> "90;0;",
+    "90;1;" -> "Mode_HeatPump",
+    "Mode_HeatPump" -> "90;1;",
+    "90;2;" -> "Fan_HeatPump",
+    "Fan_HeatPump" -> "90;2;",
+    "90;3;" -> "Temp_HeatPump",
+    "Temp_HeatPump" -> "90;3;",
+    "90;4;" -> "VDir_HeatPump",
+    "VDir_HeatPump" -> "90;4;",
+    "90;5;" -> "HDir_HeatPump",
+    "HDir_HeatPump" -> "90;5;",
+    
+    "120;1;"  -> "Temperature_Bathroom",
+    "120;0;"  -> "Humidity_Bathroom",
+
+)
+
+// dimmer function
+val org.eclipse.xtext.xbase.lib.Functions$Function5 dimmerOperation = [
+    org.openhab.core.library.items.DimmerItem relayItem, 
+    org.openhab.core.library.items.StringItem arduinoItem, 
+    String arduinoDevMap,
+    String receivedCommand,
+    Integer subType|
+    var Number percent = 0
+    if(relayItem.state instanceof DecimalType) percent = relayItem.state as DecimalType
+    if(receivedCommand==INCREASE) percent = percent + 5
+    if(receivedCommand==DECREASE) percent = percent - 5
+    if(receivedCommand==ON) percent = 100       
+    if(receivedCommand==OFF) percent = 0        
+    if(percent<0)   percent = 0
+    if(percent>100) percent = 100
+    
+    println ("Function: dimmerOperation >> "+arduinoDevMap + "1;1;" + subType + ";" + percent )
+    arduinoItem.sendCommand(arduinoDevMap + "1;0;" + subType + ";" + percent + "\n")
+]
+
+//switch function
+val org.eclipse.xtext.xbase.lib.Functions$Function4 numberOperation = [
+    org.openhab.core.library.items.NumberItem numberItem, 
+    org.openhab.core.library.items.StringItem arduinoItem, 
+    String arduinoDevMap,
+    Integer subType|
+    logInfo("number", "Sending number message to mysensors node")
+    var Integer state = numberItem.state
+    logInfo("mysensors", "Function: numberOperation >> "+arduinoDevMap + "1;1;" + subType + ";" + state )
+    arduinoItem.sendCommand(arduinoDevMap + "1;0;" + subType + ";" + state + "\n")
+]
+
+//switch function
+val org.eclipse.xtext.xbase.lib.Functions$Function4 switchOperation = [
+    org.openhab.core.library.items.SwitchItem relayItem, 
+    org.openhab.core.library.items.StringItem arduinoItem, 
+    String arduinoDevMap,
+    Integer subType|
+    logInfo("switch", "Sending switch message to mysensors node")
+    
+    var Integer state = 0
+    if (relayItem.state == OFF) {
+        state = 0 
+    }
+    else {
+        state = 1
+    }
+    logInfo("mysensors", "Function: switchOperation >> "+arduinoDevMap + "1;1;" + subType + ";" + state )
+    arduinoItem.sendCommand(arduinoDevMap + "1;0;" + subType + ";" + state + "\n")
+]
+
+
+//receiving msg from mysensors gateway
+rule "MySensors_Gateway sends to Openhab"
+when
+    Item MySensors_Gateway received update
+then
+//	logInfo("mysensor", "Message!")
+	var String[] lineBuffer =  MySensors_Gateway.state.toString().split("\n")
+	for (String line : lineBuffer) {
+	    var String[] message = line.split(";")
+	    var Integer nodeId
+	    var Integer childId
+	    var Integer msgType
+	    var Integer ack
+	    var Integer subType
+	    var String msg
+	    try {
+	        nodeId = new Integer(message.get(0))
+	        childId = new Integer(message.get(1))
+	        msgType = new Integer(message.get(2))
+	        ack = new Integer(message.get(3))
+	        subType = new Integer(message.get(4))
+	        msg = message.get(5)
+	    } catch (Exception e) {
+	        println(e)
+	    }
+	
+	    if ( msgType == 0 ) {
+	        logDebug("mysensors", "Presentation of new sensor: " + nodeId + ";" + childId + ";")
+	    }
+	    else if(msgType == 1 ) {
+	  
+	        //look up item name
+	        var String itemName
+	        try {
+	            itemName = sensorToItemsMap.get( nodeId + ";" + childId + ";")
+	            if (itemName == null) {
+	                logError("mysensors", "Could not find item for " + nodeId + ";" + childId + ";")
+	                itemName = "Mysensors_CatchAll"
+	            }
+	        } catch (Exception e) {
+	            logError("mysensors", "Could not find item for " + nodeId + ";" + childId + ";")
+	            println(e)
+	            itemName = "Mysensors_CatchAll"
+	        }
+	        
+	        logDebug("mysensors", "Update for " + itemName)
+			logDebug("mysensors", "subType = " + subType)
+	        if (subType == V_TEMP || subType == V_HUM || subType == V_DIMMER || subType == V_LEVEL) {
+	            logInfo("mysensors", "update item: " + itemName + " value: " + msg )
+	            postUpdate(itemName, msg)
+	        }
+	        else if (subType == V_TRIPPED) {
+	        	// logInfo("mysensors", "TRIPPED: " + itemName)
+	            var String state
+	            var Integer statusInt = new Integer(message.get(5))
+	            if(statusInt == 1) { 
+	                state = "ON"
+	            } 
+	            else { 
+	                state = "OFF" 
+	            }
+	            
+	            postUpdate(itemName, state)
+	            logInfo("mysensors", "Tripped item: " + itemName + " Light: " + state )
+        	}
+	        else if (subType == V_STATUS) {
+	        	logInfo("mysensors", "Status: " + itemName)
+	            var String state
+	            var Integer statusInt = new Integer(message.get(5))
+	            if(statusInt == 1) { 
+	                state = "ON"
+	            } 
+	            else { 
+	                state = "OFF" 
+	            }
+	            
+	            postUpdate(itemName, state)
+	            logInfo("mysensors", "Status Item: " + itemName + " Status: " + state )
+	        }
+          	else if (subType == V_HVAC_FLOW_MODE) {
+	    		postUpdate(itemName, msg)
+	    	}
+	        else {
+	            logError("mysensors", "**** Help, " + itemName +" has unhandled subType: " + subType)
+	        }
+	    } 
+	    else if(msgType == 3) {
+	    	if (subType == I_BATTERY_LEVEL) {
+	    		logDebug("mysensors", nodeId + " - Battery level: " + msg + '%'	)
+	    	}
+	        else if(subType == I_SKETCH_NAME){
+	            sketchName=msg
+	            logInfo("mysensors", "New sensor: " + sketchName + ", nodeId: " + nodeId)
+	        }
+	        else if(subType == I_SKETCH_VERSION){
+	            logInfo("mysensors", "Sketch version: " + msg )
+	            sketchName=""
+	        }
+	        else if(subType == I_LOG_MESSAGE) {
+	            logInfo("mysensors", "I_LOG_MESSAGE: " + msg)
+	            //MySensors_LogMessages.postUpdate(msg)
+	        }
+	        else if(subType == I_ID_REQUEST) {
+	            logInfo("mysensors", "I_ID_REQUEST")
+	        }
+	        else if(subType == I_CONFIG) {
+	            logInfo("mysensors", "request for config")
+	        }
+	        else if (subType == I_REQUEST_SIGNING) {
+	            logInfo("mysensors", "Sensors initiating signing.")
+	        }
+	        else if (subType == I_GET_NONCE) {
+	        	logInfo("mysensors", "get nonce")
+	        }
+	        else {
+	            println("some other subType of  internal message: " + line)
+	            println("subType: " + subType)
+	        }
+	    }
+	    else {
+	        logInfo("mysensors", "Unhandled msgType == " + msgType)
+	    }
+	}
+end
+
+rule "Heatpump on"
+when
+    Item Power_HeatPump received command
+then
+    switchOperation.apply(Power_HeatPump, MySensors_Gateway, sensorToItemsMap.get("Power_HeatPump"),  V_STATUS)         
+end 
+
+rule "Heatpump mode"
+when
+    Item Mode_HeatPump received command
+then
+    numberOperation.apply(Mode_HeatPump, MySensors_Gateway, sensorToItemsMap.get("Mode_HeatPump"),  V_HVAC_FLOW_MODE)         
+end 
+
+
+rule "Heatpump temp"
+when
+    Item Temp_HeatPump received command
+then
+    numberOperation.apply(Temp_HeatPump, MySensors_Gateway, sensorToItemsMap.get("Temp_HeatPump"),  V_TEMP)         
+end 
+
+rule "heatpump fan"
+when
+    Item Fan_HeatPump received command
+then
+    numberOperation.apply(Fan_HeatPump, MySensors_Gateway, sensorToItemsMap.get("Fan_HeatPump"),  V_HVAC_FLOW_MODE)         
+end 
+
+rule "heatpump vertical"
+when
+    Item VDir_HeatPump received command
+then
+    numberOperation.apply(VDir_HeatPump, MySensors_Gateway, sensorToItemsMap.get("VDir_HeatPump"),  V_HVAC_FLOW_MODE)         
+end 
+
+rule "heatpump horizontal"
+when
+    Item HDir_HeatPump received command
+then
+    numberOperation.apply(HDir_HeatPump, MySensors_Gateway, sensorToItemsMap.get("HDir_HeatPump"),  V_HVAC_FLOW_MODE)         
+end 
+
